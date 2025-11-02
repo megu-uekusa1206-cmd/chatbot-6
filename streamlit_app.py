@@ -1,170 +1,146 @@
 import streamlit as st
 import requests
 
-# 看護管理者向け 経営理論チャットボット（時間外業務削減・業務改善 特化）
-st.set_page_config(page_title="看護管理者のための経営理論チャットボット", page_icon="🩺")
-st.title("🩺 看護管理者向け 経営理論チャットボット")
-st.write("看護管理（師長・主任・管理職）を対象に、経営理論を実務に使える形で説明します。今回は特に「時間外業務削減」と「業務改善」に焦点を当てたテンプレート・チェックリスト・KPIを提供します。")
+# タイトルと説明の表示
+st.title("💬 Gemini チャットボット（経営理論モード対応）")
+st.write("このチャットボットは Google の Gemini API を利用して応答を生成します。経営理論について「わかりやすく」説明するためのモードを追加しました。")
 
-# APIキー取得（Streamlit Secrets または環境変数）
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    st.warning(".streamlit/secrets.toml に GEMINI_API_KEY を設定してください（Streamlit Cloud を使用する場合）。ローカル実行時は環境変数等でキーを設定してください。")
+# Streamlit Community CloudのSecretsからAPIキーを取得
+# .streamlit/secrets.toml に GEMINI_API_KEY = "YOUR_API_KEY" を設定してください
+gemini_api_key = st.secrets.get("GEMINI_API_KEY")
 
-# サイドバー設定
-with st.sidebar:
-    st.header("設定")
-    model_name = st.selectbox("モデルを選択", ["gemini-2.5-flash", "gemini-2.5-pro"], index=0)
-    explanation_level = st.selectbox("説明レベル", ["かんたん（新人・現場向け）", "標準（管理者向け）", "詳しい（研究・教育向け）"], index=1)
-    include_examples = st.checkbox("具体的な現場事例を含める", value=True)
-    include_steps = st.checkbox("実行手順（ステップ）を含める", value=True)
-    include_tools = st.checkbox("使えるツール・テンプレートを示す", value=True)
-
-# テンプレートトピック
-st.subheader("トピックを選ぶ（または自由に質問してください）")
-topic = st.selectbox("よくあるトピック", [
-    "選んでください",
-    "時間外業務削減・残業対策",
-    "スタッフ配置（人員計画・シフト最適化）",
-    "業務改善（業務プロセスの設計）",
-    "品質管理（CQI/PDCA・看護の安全）",
-    "リーダーシップとモチベーション",
-    "KPI設計と可視化",
-    "危機管理・BCP（感染対策等）"
-])
-
-if topic != "選んでください":
-    preset_question = st.text_area("テンプレート質問（編集可）", value=f"{topic}について、看護管理者向けに{explanation_level}の説明と実践アドバイス（チェックリスト・KPI・テンプレート付き）を教えてください。", height=100)
+if not gemini_api_key:
+    st.info("Streamlit Community CloudのSecretsに `GEMINI_API_KEY` を設定してください。", icon="🗝️")
 else:
-    preset_question = st.text_area("質問を入力してください（自由入力）", value="例：病棟の時間外業務を削減するための短期・中期・長期戦略を教えてください。", height=100)
+    # ユーザーがモデルを選択できるようにする（正しいモデル名表記を使用）
+    model_name = st.selectbox(
+        "使用する Gemini モデルを選択",
+        (
+            "gemini-2.5-flash",
+            "gemini-2.5-pro"
+        )
+    )
+    st.write(f"現在のモデル: **{model_name}**")  # 選択中のモデルを表示
 
-# ダウンロード：チェックリスト・KPIテンプレート
-st.markdown("---")
-st.subheader("テンプレート・チェックリストのダウンロード（時間外業務削減・業務改善向け）")
+    # 経営理論に特化して「やさしく」回答するモード
+    management_mode = st.checkbox("経営理論に特化してやさしく説明する", value=True)
 
-checklist_md = """# 時間外業務削減・業務改善チェックリスト
-
-- [ ] 業務棚卸し（全業務の洗い出し：担当、所要時間、頻度）を実施したか
-- [ ] 時間外発生の主要因を分類したか（手続き・連絡・情報不足・人員不足等）
-- [ ] 必須業務と改善可能業務を識別したか
-- [ ] 業務の標準化（チェックリスト・プロトコル）を作成したか
-- [ ] 業務委譲可能な項目を明確にし、看護補助者や事務へ委譲する計画があるか
-- [ ] シフト見直しや柔軟勤務制度（短時間要員、交替調整）の試験導入計画があるか
-- [ ] IT/ツール導入（入力テンプレート、自動通知、業務記録の省力化）候補をリストにしたか
-- [ ] パイロット実施（小規模試行）と評価指標を設定したか
-- [ ] 成果のフィードバック（スタッフへの共有）と定期レビューを計画したか
-"""
-
-st.download_button("チェックリスト（Markdown）をダウンロード", data=checklist_md, file_name="checklist_overtime_reduction.md", mime="text/markdown")
-
-kpi_csv = (
-    "KPI,定義,目標値,現在値,データ元,更新頻度\n"
-    "平均残業時間／月,1人当たりの月平均残業時間,<=10時間,,勤怠システム,月次\n"
-    "時間外発生率,総勤務時間に対する時間外時間の割合,<=5%,,勤怠システム,月次\n"
-    "業務委譲率,委譲可能業務のうち実際に委譲された割合,>=15%,,業務レビュー,月次\n"
-    "必須業務比率,全業務のうち必須業務の割合,維持（変化要チェック）,,業務棚卸,四半期\n"
-    "患者ケア遅延件数（処置待ち）,所定時間を超えた処置発生数,減少傾向,,院内データ,週次\n"
-)
-
-st.download_button("KPIテンプレート（CSV）をダウンロード", data=kpi_csv, file_name="kpi_overtime_template.csv", mime="text/csv")
-
-# 追加オプション（出力サイズ）
-st.markdown("---")
-with st.expander("追加オプション（詳細）", expanded=False):
-    st.write("応答の長さや生成の創造性を調整できます。")
-    max_tokens = st.slider("応答の最大トークン（目安）", min_value=150, max_value=2048, value=800)
-    temperature = st.slider("創造性（temperature）", min_value=0.0, max_value=1.0, value=0.3, step=0.1)
-
-# チャット履歴の管理
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-for msg in st.session_state.messages:
-    role = msg.get("role", "user")
-    with st.chat_message(role):
-        st.markdown(msg.get("content", ""))
-
-# ユーザー入力（テンプレートを編集して送信）
-user_input = st.chat_input("質問を入力して Enter を押してください（テンプレートを編集して使えます）")
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    # システムプロンプト（看護管理者向け、時間外削減にフォーカス）
-    system_prompt = (
-        "あなたは看護管理と経営理論に詳しい専門家です。受け手は看護管理者（師長・主任・管理職）で、"
-        "『時間外業務削減』と『業務改善』に関する実務的な助言を求めています。回答は日本語で、以下を必ず守ってください：\n"
-        "- 看護現場の制約（人員不足、交代制勤務、患者安全）を踏まえること。\n"
-        "- 短期（即効性）、中期、長期のアクションプランを提示すること。\n"
-        "- 具体的なチェックリストと実行ステップ（担当・期限・評価指標）を含めること。\n"
-        "- KPI の例とデータ取得方法を示すこと。\n"
-        "- 導入時のリスクと対応策（患者安全、法的配慮）も簡潔に触れること。\n"
+    # 説明レベル（出力の詳細さ）
+    explanation_level = st.selectbox(
+        "説明レベル",
+        ("かんたん（初心者向け）", "標準（大学生・実務入門）", "詳しい（専門家向け）")
     )
 
-    # API向けメッセージ構築
-    contents = []
-    contents.append({"role": "system", "parts": [{"text": system_prompt}]})
-    for m in st.session_state.messages:
-        role = m["role"]
-        api_role = "user" if role == "user" else "assistant"
-        contents.append({"role": api_role, "parts": [{"text": m["content"]}]})
+    # 説明レベルに応じた generationConfig のパラメータ調整
+    if explanation_level == "かんたん（初心者向け）":
+        temp = 0.2
+        max_tokens = 300
+        style_hint = "短く、平易な日本語で、例え話や箇条書きを使って説明してください。専門用語を使う場合は必ず注釈をつけてください。"
+    elif explanation_level == "標準（大学生・実務入門）":
+        temp = 0.5
+        max_tokens = 512
+        style_hint = "読みやすい日本語で、重要な概念を定義し、実務的な例と簡単な図解（テキストによる）を使って説明してください。"
+    else:
+        temp = 0.7
+        max_tokens = 1024
+        style_hint = "専門的な用語を許容し、理論の背景・代表的な論者・批判点・実務への応用を含めて詳しく説明してください。"
 
-    style_hint = f"説明レベル: {explanation_level}. 具体例: {'含める' if include_examples else '含めない'}. 実行手順: {'含める' if include_steps else '含めない'}. テンプレート: {'提示' if include_tools else '提示しない'}."
-    contents.append({"role": "user", "parts": [{"text": style_hint}]})
+    if "messages" not in st.session_state:
+        # 初期のメッセージリストをセッションステートに作成
+        st.session_state.messages = []
 
-    api_url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    data = {
-        "contents": contents,
-        "generationConfig": {
-            "temperature": temperature,
-            "topP": 0.9,
-            "maxOutputTokens": max_tokens
-        }
-    }
+    # 既存のチャットメッセージを表示
+    for message in st.session_state.messages:
+        # roleに応じて日本語で表示
+        display_role = "ユーザー" if message["role"] == "user" else "アシスタント"
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    with st.chat_message("assistant"):
-        with st.spinner("応答を生成中..."):
-            if not GEMINI_API_KEY:
-                reply_text = "エラー: GEMINI_API_KEY が設定されていません。環境変数または .streamlit/secrets.toml を確認してください。"
+    # ユーザーがメッセージを入力するためのチャット入力フィールド
+    if prompt := st.chat_input("ここにメッセージを入力"):
+        # ユーザーのプロンプトを保存・表示
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Gemini API用にメッセージ形式を準備（ロールを "user"/"assistant"/"system" に変換）
+        gemini_messages = []
+
+        # 経営理論モードが有効な場合、最初に system メッセージで振る舞いを指定
+        if management_mode:
+            system_instruction = (
+                "あなたは経営理論の専門家で、受け手にとって分かりやすく説明する能力があります。"
+                "依頼があれば、次の点を常に守ってください：\n"
+                f"- 回答は日本語で書くこと。\n"
+                f"- {style_hint}\n"
+                "- 必要に応じて簡単な箇条書き・番号付きリスト・例え話を用いること。\n"
+                "- 初心者向けの用語説明（定義）を含めること。\n"
+                "- 質問で事例や業界が指定されている場合は、その文脈に合わせて説明すること。"
+            )
+            gemini_messages.append({
+                "role": "system",
+                "parts": [{"text": system_instruction}]
+            })
+
+        # 既存の会話を API に渡す
+        for m in st.session_state.messages:
+            # StreamlitのロールをAPIのロールにマッピング
+            if m["role"] == "user":
+                api_role = "user"
+            elif m["role"] == "assistant":
+                api_role = "assistant"
             else:
-                try:
-                    resp = requests.post(api_url, headers=headers, json=data, timeout=60)
-                    resp.raise_for_status()
-                    rj = resp.json()
-                    if "candidates" in rj and rj["candidates"] and "content" in rj["candidates"][0] and "parts" in rj["candidates"][0]["content"]:
-                        reply_text = rj["candidates"][0]["content"]["parts"][0]["text"]
+                api_role = "user"
+            gemini_messages.append(
+                {
+                    "role": api_role,
+                    "parts": [{"text": m["content"]}]
+                }
+            )
+
+        # Gemini API endpoint
+        api_url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={gemini_api_key}"
+
+        headers = {"Content-Type": "application/json"}
+        data = {
+            "contents": gemini_messages,
+            "generationConfig": {
+                "temperature": temp,
+                "topP": 0.8,
+                "maxOutputTokens": max_tokens
+            }
+        }
+
+        try:
+            # アシスタントの応答をチャットメッセージコンテナ内に表示
+            with st.chat_message("assistant"):
+                with st.spinner(f"{model_name} が応答を生成中..."):
+                    response = requests.post(api_url, headers=headers, json=data, timeout=60)
+                    response.raise_for_status()  # HTTPエラーがあれば例外を発生
+
+                    result = response.json()
+
+                    # APIからのレスポンス構造のチェックと応答の取得
+                    if "candidates" in result and result["candidates"] and \
+                       "content" in result["candidates"][0] and \
+                       "parts" in result["candidates"][0]["content"] and \
+                       result["candidates"][0]["content"]["parts"]:
+
+                        gemini_reply = result["candidates"][0]["content"]["parts"][0]["text"]
                     else:
-                        reply_text = f"エラー: 予期しないAPI応答形式です。{rj}"
-                except requests.exceptions.RequestException as e:
-                    reply_text = f"APIリクエストエラー: {e}"
+                        # 予期しないレスポンス形式の場合
+                        gemini_reply = f"エラー: 予期しないAPI応答形式です。{result}"
 
-            st.markdown(reply_text)
-            st.session_state.messages.append({"role": "assistant", "content": reply_text})
+                    st.markdown(gemini_reply)
 
-# 便利ボタン：テンプレート挿入（ワンクリックで入力欄に送る）
-st.markdown("---")
-col1, col2, col3 = st.columns(3)
-with col1:
-    if st.button("時間外削減のテンプレートを挿入"):
-        template = (
-            "病棟における時間外業務削減の短期・中期・長期アクションプランを、担当・期限・KPI付きで教えてください。"
-        )
-        st.session_state.messages.append({"role": "user", "content": template})
-        st.experimental_rerun()
-with col2:
-    if st.button("業務改善（プロセス改革）テンプレートを挿入"):
-        template = (
-            "業務プロセスの棚卸から改善・定着までの手順（PDCA）を、チェックリストと評価指標付きで示してください。"
-        )
-        st.session_state.messages.append({"role": "user", "content": template})
-        st.experimental_rerun()
-with col3:
-    if st.button("チェックリストを挿入"):
-        st.session_state.messages.append({"role": "user", "content": checklist_md})
-        st.experimental_rerun()
+            # アシスタントの応答をセッションステートに保存
+            st.session_state.messages.append({"role": "assistant", "content": gemini_reply})
 
-# フッター
-st.caption("このアプリは看護管理者向けの説明を支援するためのツールです。実際の運用や法的判断は医療機関の規定や専門家の助言に従ってください。")
-# End of file
+        except requests.exceptions.RequestException as e:
+            error_message = f"APIリクエストエラーが発生しました: {e}"
+            st.error(error_message)
+            st.session_state.messages.append({"role": "assistant", "content": error_message})
+        except Exception as e:
+            error_message = f"予期せぬエラーが発生しました: {e}"
+            st.error(error_message)
+            st.session_state.messages.append({"role": "assistant", "content": error_message})
