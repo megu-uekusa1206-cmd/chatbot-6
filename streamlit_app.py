@@ -1,12 +1,12 @@
 import streamlit as st
 import requests
 
-# 看護管理者向け 経営理論チャットボット
+# 看護管理者向け 経営理論チャットボット（時間外業務削減・業務改善 特化）
 st.set_page_config(page_title="看護管理者のための経営理論チャットボット", page_icon="🩺")
 st.title("🩺 看護管理者向け 経営理論チャットボット")
-st.write("看護管理（看護管理者・師長・主任など）を対象に、経営理論をわかりやすく、実務に使える形で説明します。事例や具体的な実践アドバイスを含めます。")
+st.write("看護管理（師長・主任・管理職）を対象に、経営理論を実務に使える形で説明します。今回は特に「時間外業務削減」と「業務改善」に焦点を当てたテンプレート・チェックリスト・KPIを提供します。")
 
-# APIキー取得
+# APIキー取得（Streamlit Secrets または環境変数）
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     st.warning(".streamlit/secrets.toml に GEMINI_API_KEY を設定してください（Streamlit Cloud を使用する場合）。ローカル実行時は環境変数等でキーを設定してください。")
@@ -20,77 +20,99 @@ with st.sidebar:
     include_steps = st.checkbox("実行手順（ステップ）を含める", value=True)
     include_tools = st.checkbox("使えるツール・テンプレートを示す", value=True)
 
-# テンプレートトピック（看護管理に関連した経営理論トピック）
+# テンプレートトピック
 st.subheader("トピックを選ぶ（または自由に質問してください）")
 topic = st.selectbox("よくあるトピック", [
     "選んでください",
+    "時間外業務削減・残業対策",
     "スタッフ配置（人員計画・シフト最適化）",
-    "コスト管理と予算編成",
+    "業務改善（業務プロセスの設計）",
     "品質管理（CQI/PDCA・看護の安全）",
     "リーダーシップとモチベーション",
-    "組織文化と風土改革",
-    "戦略的計画（病棟・部門レベル）",
-    "業務改善とプロセス設計（看護動線など）",
-    "意思決定とデータ活用（KPI設定・可視化）",
+    "KPI設計と可視化",
     "危機管理・BCP（感染対策等）"
 ])
 
-preset_question = ""
 if topic != "選んでください":
-    preset_question = st.text_area("テンプレート質問（編集可）", value=f"{topic}について、看護管理者向けに{explanation_level}の説明と実践アドバイスを教えてください。", height=80)
+    preset_question = st.text_area("テンプレート質問（編集可）", value=f"{topic}について、看護管理者向けに{explanation_level}の説明と実践アドバイス（チェックリスト・KPI・テンプレート付き）を教えてください。", height=100)
 else:
-    preset_question = st.text_area("質問を入力してください（自由入力）", value="看護管理に関する質問を入力してください。例：病棟のスタッフ不足をどう戦略的に解決するか？", height=80)
+    preset_question = st.text_area("質問を入力してください（自由入力）", value="例：病棟の時間外業務を削減するための短期・中期・長期戦略を教えてください。", height=100)
 
-# 追加オプション
+# ダウンロード：チェックリスト・KPIテンプレート
+st.markdown("---")
+st.subheader("テンプレート・チェックリストのダウンロード（時間外業務削減・業務改善向け）")
+
+checklist_md = """# 時間外業務削減・業務改善チェックリスト
+
+- [ ] 業務棚卸し（全業務の洗い出し：担当、所要時間、頻度）を実施したか
+- [ ] 時間外発生の主要因を分類したか（手続き・連絡・情報不足・人員不足等）
+- [ ] 必須業務と改善可能業務を識別したか
+- [ ] 業務の標準化（チェックリスト・プロトコル）を作成したか
+- [ ] 業務委譲可能な項目を明確にし、看護補助者や事務へ委譲する計画があるか
+- [ ] シフト見直しや柔軟勤務制度（短時間要員、交替調整）の試験導入計画があるか
+- [ ] IT/ツール導入（入力テンプレート、自動通知、業務記録の省力化）候補をリストにしたか
+- [ ] パイロット実施（小規模試行）と評価指標を設定したか
+- [ ] 成果のフィードバック（スタッフへの共有）と定期レビューを計画したか
+"""
+
+st.download_button("チェックリスト（Markdown）をダウンロード", data=checklist_md, file_name="checklist_overtime_reduction.md", mime="text/markdown")
+
+kpi_csv = (
+    "KPI,定義,目標値,現在値,データ元,更新頻度\n"
+    "平均残業時間／月,1人当たりの月平均残業時間,<=10時間,,勤怠システム,月次\n"
+    "時間外発生率,総勤務時間に対する時間外時間の割合,<=5%,,勤怠システム,月次\n"
+    "業務委譲率,委譲可能業務のうち実際に委譲された割合,>=15%,,業務レビュー,月次\n"
+    "必須業務比率,全業務のうち必須業務の割合,維持（変化要チェック）,,業務棚卸,四半期\n"
+    "患者ケア遅延件数（処置待ち）,所定時間を超えた処置発生数,減少傾向,,院内データ,週次\n"
+)
+
+st.download_button("KPIテンプレート（CSV）をダウンロード", data=kpi_csv, file_name="kpi_overtime_template.csv", mime="text/csv")
+
+# 追加オプション（出力サイズ）
 st.markdown("---")
 with st.expander("追加オプション（詳細）", expanded=False):
-    st.write("出力フォーマットや長さの微調整")
-    max_tokens = st.slider("応答の最大トークン（目安）", min_value=100, max_value=2048, value=600)
-    temperature = st.slider("創造性（temperature）", min_value=0.0, max_value=1.0, value=0.4, step=0.1)
+    st.write("応答の長さや生成の創造性を調整できます。")
+    max_tokens = st.slider("応答の最大トークン（目安）", min_value=150, max_value=2048, value=800)
+    temperature = st.slider("創造性（temperature）", min_value=0.0, max_value=1.0, value=0.3, step=0.1)
 
 # チャット履歴の管理
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 表示しているメッセージをレンダリング
 for msg in st.session_state.messages:
     role = msg.get("role", "user")
     with st.chat_message(role):
         st.markdown(msg.get("content", ""))
 
-# ユーザー入力
+# ユーザー入力（テンプレートを編集して送信）
 user_input = st.chat_input("質問を入力して Enter を押してください（テンプレートを編集して使えます）")
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
-    # 表示
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # システムプロンプトを準備（看護管理者向け）
+    # システムプロンプト（看護管理者向け、時間外削減にフォーカス）
     system_prompt = (
-        "あなたは看護管理と経営理論に詳しい専門家です。受け手は看護管理者（師長・主任・看護部門の管理職）で、実務にすぐ使える具体的な助言を求めています。回答は日本語で、以下の点を守ってください：\n"
-        "- 看護現場の制約（人員不足、交代制勤務、法的・倫理的配慮）を踏まえること。\n"
-        "- 具体例や簡単なチェックリスト、実行ステップを含めること（要望があればテンプレートとして示す）。\n"
-        "- KPIや評価指標の具体例を示すこと。\n"
-        "- できるだけ短い見出しと箇条書きで読みやすくまとめること。\n"
-        "- エビデンスが必要な場合はその旨を明示し、参考にする文献タイプ（ガイドライン、レビュー）を示す。"
+        "あなたは看護管理と経営理論に詳しい専門家です。受け手は看護管理者（師長・主任・管理職）で、"
+        "『時間外業務削減』と『業務改善』に関する実務的な助言を求めています。回答は日本語で、以下を必ず守ってください：\n"
+        "- 看護現場の制約（人員不足、交代制勤務、患者安全）を踏まえること。\n"
+        "- 短期（即効性）、中期、長期のアクションプランを提示すること。\n"
+        "- 具体的なチェックリストと実行ステップ（担当・期限・評価指標）を含めること。\n"
+        "- KPI の例とデータ取得方法を示すこと。\n"
+        "- 導入時のリスクと対応策（患者安全、法的配慮）も簡潔に触れること。\n"
     )
 
-    # メッセージをAPI用に整形
+    # API向けメッセージ構築
     contents = []
     contents.append({"role": "system", "parts": [{"text": system_prompt}]})
-
-    # コンテキスト（最近の会話）を付与
     for m in st.session_state.messages:
         role = m["role"]
         api_role = "user" if role == "user" else "assistant"
         contents.append({"role": api_role, "parts": [{"text": m["content"]}]})
 
-    # 追加ヒント（出力スタイル）
     style_hint = f"説明レベル: {explanation_level}. 具体例: {'含める' if include_examples else '含めない'}. 実行手順: {'含める' if include_steps else '含めない'}. テンプレート: {'提示' if include_tools else '提示しない'}."
     contents.append({"role": "user", "parts": [{"text": style_hint}]})
 
-    # API呼び出し
     api_url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     data = {
@@ -102,7 +124,6 @@ if user_input:
         }
     }
 
-    # 送信とレスポンス表示
     with st.chat_message("assistant"):
         with st.spinner("応答を生成中..."):
             if not GEMINI_API_KEY:
@@ -122,25 +143,28 @@ if user_input:
             st.markdown(reply_text)
             st.session_state.messages.append({"role": "assistant", "content": reply_text})
 
-# ボタンでテンプレート質問を送信
+# 便利ボタン：テンプレート挿入（ワンクリックで入力欄に送る）
 st.markdown("---")
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
-    if st.button("スタッフ配置のテンプレートを挿入"):
+    if st.button("時間外削減のテンプレートを挿入"):
         template = (
-            "病棟でのスタッフ不足に対処するための戦略（短期・中期・長期）を、看護管理者向けに実行可能な手順で教えてください。"
+            "病棟における時間外業務削減の短期・中期・長期アクションプランを、担当・期限・KPI付きで教えてください。"
         )
         st.session_state.messages.append({"role": "user", "content": template})
         st.experimental_rerun()
 with col2:
-    if st.button("品質管理（PDCA）のテンプレートを挿入"):
+    if st.button("業務改善（プロセス改革）テンプレートを挿入"):
         template = (
-            "看護の質向上のためのPDCAサイクルの回し方を、指標（KPI）と実行チェックリスト付きで教えてください。"
+            "業務プロセスの棚卸から改善・定着までの手順（PDCA）を、チェックリストと評価指標付きで示してください。"
         )
         st.session_state.messages.append({"role": "user", "content": template})
+        st.experimental_rerun()
+with col3:
+    if st.button("チェックリストを挿入"):
+        st.session_state.messages.append({"role": "user", "content": checklist_md})
         st.experimental_rerun()
 
 # フッター
 st.caption("このアプリは看護管理者向けの説明を支援するためのツールです。実際の運用や法的判断は医療機関の規定や専門家の助言に従ってください。")
-
 # End of file
